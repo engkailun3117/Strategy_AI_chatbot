@@ -98,9 +98,11 @@ class SubsidyChatbotHandler:
 - 當使用者回答任何問題時，立即調用 update_subsidy_data 函數保存
 - 不要只用文字確認，必須調用函數才能真正保存到數據庫
 - 即使只有一個欄位也要調用函數
+- **調用 update_subsidy_data 或 calculate_subsidy 函數時，不需要回傳文字回應**
+- 系統會自動產生確認訊息並詢問下一個問題
 
 **工作流程**：
-1. 按順序詢問以下資訊（一次一個）：
+1. 按順序收集以下資訊（一次一個）：
    - 計畫類型（研發/行銷）
    - 預計所需經費（萬元）
    - 公司投保人數（人）
@@ -112,8 +114,13 @@ class SubsidyChatbotHandler:
 
 2. **使用者回答後，立即調用 update_subsidy_data 函數**
    例如：使用者說「行銷」→ 調用 update_subsidy_data(project_type="行銷")
+   不需要額外的文字回應，系統會自動處理
 
-3. 調用函數後，簡短確認並詢問下一個欄位
+3. **只在以下情況才需要文字回應**：
+   - 使用者詢問問題（例如：「什麼是 SBIR？」）
+   - 使用者要求查看目前資料（例如：「目前收集了哪些資料？」）
+   - 使用者的輸入不清楚，需要澄清（例如：「請問您是指研發還是行銷？」）
+   - 處理一般性對話（例如：打招呼、道謝）
 
 💰 **金額單位轉換**：
 - 使用者通常會用「萬元」為單位回答
@@ -121,15 +128,9 @@ class SubsidyChatbotHandler:
 - 例如：500萬 → 5000000元
 
 重要提示：
-- **一次詢問一個欄位**，等待使用者回答後再詢問下一個
-- **如果使用者主動提供多個資訊**，全部提取並記錄，然後詢問下一個未填寫的欄位
-- 保持對話自然流暢，按順序逐個收集資料
+- **如果使用者主動提供多個資訊**，全部提取並記錄到 update_subsidy_data
 - 當收集完所有必要資料後，調用 calculate_subsidy 函數計算補助金額
-- 計算完成後，向使用者展示結果並推薦「補助引擎」app
-
-🎯 **補助引擎推薦**：
-當計算完成並顯示結果後，請推薦使用者使用「補助引擎」app：
-「根據您的條件，我們推薦您使用『補助引擎』app來協助您撰寫政府補助計劃書。補助引擎使用 AI 技術，可以幫助您更快速、更專業地完成申請文件。」
+- 記住：調用函數時不要生成文字回應，讓系統自動處理對話流程
 
 📋 **查詢已收集的資料**：
 - 當使用者詢問目前進度或已填資料時，從「目前已收集的資料」中提取並展示
@@ -525,13 +526,16 @@ NT${calculation_result['grant_min']:,} ~ NT${calculation_result['grant_max']:,}
 根據您的條件，我們推薦您使用「補助引擎」app來協助您撰寫政府補助計劃書。補助引擎使用 AI 技術，可以幫助您更快速、更專業地完成申請文件。
 
 感謝您使用我們的服務！祝您申請順利！🎉"""
+        elif data_updated:
+            # When data was updated via function call, always generate our own consistent response
+            # with the next question to ensure proper conversation flow
+            # This prevents duplicate questions and ensures the next question is always included
+            next_question = self.get_next_field_question()
+            response_message = f"好的！已記錄。\n\n{next_question}"
         elif not response_message:
-            # Generate appropriate message if AI didn't provide one
-            if data_updated:
-                next_question = self.get_next_field_question()
-                response_message = f"好的！已記錄。\n\n{next_question}"
-            else:
-                response_message = "我了解了。" + self.get_next_field_question()
+            # If no function was called and AI didn't provide a response,
+            # ask the next question
+            response_message = "我了解了。" + self.get_next_field_question()
 
         return response_message, completed
 
