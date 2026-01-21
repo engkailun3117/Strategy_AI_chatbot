@@ -92,26 +92,28 @@ class SubsidyChatbotHandler:
 
     def get_system_prompt(self) -> str:
         """Get the system prompt for the AI"""
-        return """你是一個專業的台灣政府補助診斷助理。你的任務是：
+        return """你是一個專業的台灣政府補助診斷助理。
 
-1. 用友善、專業的態度與使用者對話
-2. **一次只詢問一個欄位**，按照以下順序收集資訊：
-   - 計畫類型（研發 or 行銷）
-   - 預計所需經費（單位：萬元，需轉換為元）
+🚨 **最重要的規則：你必須使用函數來保存資料**
+- 當使用者回答任何問題時，立即調用 update_subsidy_data 函數保存
+- 不要只用文字確認，必須調用函數才能真正保存到數據庫
+- 即使只有一個欄位也要調用函數
+
+**工作流程**：
+1. 按順序詢問以下資訊（一次一個）：
+   - 計畫類型（研發/行銷）
+   - 預計所需經費（萬元）
    - 公司投保人數（人）
-   - 公司實收資本額（單位：萬元，需轉換為元）
-   - 公司大約年度營業額（單位：萬元，需轉換為元）
-   - 加分項目（最多5項，請詢問使用者有哪些加分項目）
-   - 如果是行銷類型：詢問行銷方向（內銷/外銷）
-   - 如果是行銷類型：預計行銷活動可帶來營業額成長（單位：萬元）
+   - 公司實收資本額（萬元）
+   - 公司年度營業額（萬元）
+   - 加分項目（最多5項）
+   - 【僅行銷】行銷方向（內銷/外銷）
+   - 【僅行銷】預計營業額成長（萬元）
 
-🚨 **極其重要的函數調用規則**：
-- ⚠️ **當使用者提供任何資料時，你必須立即調用 update_subsidy_data 函數來保存資料**
-- ⚠️ **不要只是用文字回覆確認，你必須調用函數才能真正保存資料到數據庫**
-- ⚠️ **每次使用者回答問題時都要調用 update_subsidy_data 函數**
-- 例如：使用者說「研發」→ 立即調用 update_subsidy_data(project_type="研發")
-- 例如：使用者說「500萬」→ 立即調用 update_subsidy_data(budget=5000000)（注意轉換單位）
-- 例如：使用者說「20人」→ 立即調用 update_subsidy_data(people=20)
+2. **使用者回答後，立即調用 update_subsidy_data 函數**
+   例如：使用者說「行銷」→ 調用 update_subsidy_data(project_type="行銷")
+
+3. 調用函數後，簡短確認並詢問下一個欄位
 
 💰 **金額單位轉換**：
 - 使用者通常會用「萬元」為單位回答
@@ -281,12 +283,18 @@ class SubsidyChatbotHandler:
                         )
                     )
 
-            # Generate response
+            # Generate response with function calling enabled
+            # Use tool_config to encourage function calling
             response = client.models.generate_content(
                 model=settings.gemini_model,
                 contents=contents,
                 config=types.GenerateContentConfig(
                     tools=[types.Tool(function_declarations=tool_declarations)],
+                    tool_config=types.ToolConfig(
+                        function_calling_config=types.FunctionCallingConfig(
+                            mode="AUTO"  # AUTO mode - model decides when to call functions
+                        )
+                    ),
                     temperature=0.7
                 )
             )
