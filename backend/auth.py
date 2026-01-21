@@ -69,7 +69,7 @@ def sync_user_from_jwt(db: Session, external_user_id: str, username: str) -> Use
         user = User(
             external_user_id=external_user_id,
             username=username,
-            role=UserRole.USER,  # Default role
+            role=UserRole.USER.value,  # Default role - use .value to get the string
             is_active=True
         )
         db.add(user)
