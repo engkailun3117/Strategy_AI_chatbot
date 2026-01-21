@@ -11,12 +11,7 @@ This document explains how to set up the database for the Taiwan Government Subs
 1. **users** - User authentication and management
 2. **chat_sessions** - Chat session tracking
 3. **chat_messages** - Conversation history
-4. **subsidy_consultations** - Taiwan government subsidy consultation data ⭐ **NEW**
-
-### Legacy Tables (from previous project)
-
-5. **company_onboarding** - Company onboarding data
-6. **products** - Product information
+4. **subsidy_consultations** - Taiwan government subsidy consultation data ⭐ **MAIN TABLE**
 
 ## 📊 Main Table: subsidy_consultations
 
@@ -31,10 +26,6 @@ This is the core table for storing Taiwan government subsidy calculation and rec
 | `user_id` | INTEGER | Link to user (optional for guests) |
 | `source` | VARCHAR(100) | Data source (default: "補助診斷士") |
 | `project_type` | VARCHAR(50) | Project type: "研發" or "行銷" |
-| `email` | VARCHAR(255) | User email |
-| `company_name` | VARCHAR(255) | Company name (公司行號) |
-| `phone` | VARCHAR(50) | Phone number |
-| `consult` | BOOLEAN | Whether user needs consultation |
 | `budget` | BIGINT | Estimated budget (預計所需經費) in 元 |
 | `people` | INTEGER | Number of insured employees (投保人數) |
 | `capital` | BIGINT | Registered capital (實收資本額) in 元 |
@@ -46,7 +37,6 @@ This is the core table for storing Taiwan government subsidy calculation and rec
 | `grant_min` | BIGINT | Minimum subsidy amount (補助最低值) in 元 |
 | `grant_max` | BIGINT | Maximum subsidy amount (補助最高值) in 元 |
 | `recommended_plans` | TEXT | Recommended subsidy plans (comma-separated) |
-| `device` | VARCHAR(50) | Device type: mobile, desktop, tablet |
 | `timestamp` | TIMESTAMP | Record timestamp |
 | `created_at` | TIMESTAMP | Creation timestamp |
 | `updated_at` | TIMESTAMP | Last update timestamp |
@@ -107,7 +97,7 @@ WHERE table_schema = 'public'
 ORDER BY table_name;
 ```
 
-You should see all 6 tables listed.
+You should see all 4 tables listed.
 
 ## 📝 Subsidy Calculation Logic Reference
 

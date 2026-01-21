@@ -12,8 +12,6 @@ from models import (
     User,
     ChatSession,
     ChatMessage,
-    CompanyOnboarding,
-    Product,
     SubsidyConsultation
 )
 from config import get_settings
@@ -39,9 +37,7 @@ def init_database():
         print("   1. users - User authentication and management")
         print("   2. chat_sessions - Chat session tracking")
         print("   3. chat_messages - Conversation history")
-        print("   4. company_onboarding - Company onboarding data (legacy)")
-        print("   5. products - Product information (legacy)")
-        print("   6. subsidy_consultations - Taiwan government subsidy consultation data")
+        print("   4. subsidy_consultations - Taiwan government subsidy consultation data")
 
         print("\n" + "=" * 60)
         print("✨ Database initialization complete!")

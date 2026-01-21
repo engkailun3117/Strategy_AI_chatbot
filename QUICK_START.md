@@ -8,6 +8,7 @@ I've created the complete database structure for your Taiwan Government Subsidy 
 
 1. **`backend/models.py`** (Updated)
    - Added `SubsidyConsultation` model for storing consultation data
+   - Removed legacy company onboarding models
    - Updated imports to support BigInteger for large financial values
 
 2. **`backend/config.py`** (Updated)
@@ -100,12 +101,12 @@ This will run the example calculations and verify the logic is working.
 
 Stores all Taiwan government subsidy consultation data:
 
-- **Company Info**: email, company_name, phone
+- **Basic Info**: source, project_type (研發/行銷)
 - **Financial Data**: budget, people, capital, revenue
-- **Project Info**: project_type (研發/行銷), marketing_type
+- **Project Info**: marketing_type, growth_revenue
 - **Bonus Items**: bonus_count, bonus_details
 - **Results**: grant_min, grant_max, recommended_plans
-- **Tracking**: device, timestamp, source
+- **Tracking**: timestamp, created_at, updated_at
 
 ## 💡 Calculation Logic Overview
 
@@ -135,6 +136,8 @@ print(f"推薦方案: {', '.join(result['recommended_plans'])}")
 ### For 行銷 (Marketing) Projects:
 - **開拓海外市場計畫** - Export market development
 - **內銷行銷推廣計畫** - Domestic marketing (reserved)
+
+After showing recommendations, the chatbot should also recommend **補助引擎** app for writing government subsidy proposals.
 
 ## 🔄 Next Development Steps
 
