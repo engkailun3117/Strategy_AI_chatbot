@@ -303,17 +303,27 @@ class SubsidyChatbotHandler:
                 # Check for function calls
                 if candidate.content and candidate.content.parts:
                     for part in candidate.content.parts:
-                        if part.function_call:
+                        # Debug: Print the part structure
+                        print(f"🔍 Part type: {type(part)}")
+                        print(f"🔍 Part attributes: {dir(part)}")
+
+                        # Check different possible attribute names
+                        if hasattr(part, 'function_call') and part.function_call:
                             fc = part.function_call
                             function_args = dict(fc.args) if fc.args else {}
+
+                            print(f"✅ Function call detected: {fc.name}")
+                            print(f"   Arguments: {function_args}")
 
                             result["function_calls"].append({
                                 "name": fc.name,
                                 "arguments": function_args
                             })
-                        elif part.text:
+                        elif hasattr(part, 'text') and part.text:
+                            print(f"💬 Text response: {part.text[:100]}...")
                             result["message"] += part.text
 
+            print(f"📊 Result: {len(result['function_calls'])} function calls, message length: {len(result['message'])}")
             return result
 
         except Exception as e:
