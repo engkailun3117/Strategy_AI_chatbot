@@ -6,16 +6,16 @@ from database import Base
 
 
 class UserRole(str, enum.Enum):
-    """User role enumeration"""
-    USER = "user"
-    ADMIN = "admin"
+    """User role enumeration - Updated to match DB case"""
+    USER = "USER"  # Change this to uppercase
+    ADMIN = "ADMIN" # Change this to uppercase to be safe
 
 
 class ChatSessionStatus(str, enum.Enum):
-    """Chat session status enumeration"""
-    ACTIVE = "active"
-    COMPLETED = "completed"
-    ABANDONED = "abandoned"
+    """Chat session status enumeration - Updated to match DB case"""
+    ACTIVE = "ACTIVE"
+    COMPLETED = "COMPLETED"
+    ABANDONED = "ABANDONED"
 
 
 class User(Base):
@@ -26,7 +26,11 @@ class User(Base):
     id = Column(Integer, primary_key=True, index=True)
     external_user_id = Column(String(100), unique=True, nullable=False, index=True)  # Maps to main system's user ID
     username = Column(String(50), nullable=False, index=True)
-    role = Column(Enum(UserRole, native_enum=True, create_constraint=True, name='userrole'), default=UserRole.USER, nullable=False)
+    role = Column(
+        Enum(UserRole, native_enum=True, values_callable=lambda obj: [e.value for e in obj]),
+        default=UserRole.USER,
+        nullable=False
+    )
     is_active = Column(Boolean, default=True, nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
@@ -52,8 +56,11 @@ class ChatSession(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
-    status = Column(Enum(ChatSessionStatus, native_enum=True, create_constraint=True, name='chatsessionstatus'),
-                    default=ChatSessionStatus.ACTIVE, nullable=False)
+    status = Column(
+        Enum(ChatSessionStatus, native_enum=True, values_callable=lambda obj: [e.value for e in obj]),
+        default=ChatSessionStatus.ACTIVE,
+        nullable=False
+    )
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
     completed_at = Column(DateTime, nullable=True)

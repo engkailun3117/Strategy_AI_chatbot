@@ -69,13 +69,17 @@ def sync_user_from_jwt(db: Session, external_user_id: str, username: str) -> Use
         user = User(
             external_user_id=external_user_id,
             username=username,
-            role=UserRole.USER.value,  # Default role - use .value to get the string
+            role=UserRole.USER,  # This will use "USER" because of (str, enum.Enum)
             is_active=True
         )
         db.add(user)
-        db.commit()
-        db.refresh(user)
-        print(f"✅ Created new user: {username} (external_id: {external_user_id})")
+        try:
+            db.commit()
+            db.refresh(user)
+        except Exception as e:
+            db.rollback()
+            print(f"❌ Database Error: {e}")
+            raise
 
     return user
 
