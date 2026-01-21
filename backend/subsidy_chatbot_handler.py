@@ -262,7 +262,8 @@ class SubsidyChatbotHandler:
             for msg in messages:
                 content_parts = []
                 for part in msg["parts"]:
-                    content_parts.append(types.Part.from_text(part))
+                    # In the new API, use Part(text=...) instead of Part.from_text()
+                    content_parts.append(types.Part(text=part))
                 contents.append(types.Content(
                     role=msg["role"],
                     parts=content_parts
