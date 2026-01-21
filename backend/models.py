@@ -1,4 +1,4 @@
-from sqlalchemy import Column, String, Integer, DateTime, ForeignKey, Enum, Text, Boolean, Float
+from sqlalchemy import Column, String, Integer, BigInteger, DateTime, ForeignKey, Enum, Text, Boolean, Float
 from sqlalchemy.orm import relationship
 from datetime import datetime
 import enum
@@ -205,4 +205,108 @@ class Product(Base):
             "主要原料": self.main_raw_materials,
             "產品規格(尺寸、精度)": self.product_standard,
             "技術優勢": self.technical_advantages
+        }
+
+
+class SubsidyConsultation(Base):
+    """台灣政府補助方案診斷與推薦資料"""
+
+    __tablename__ = "subsidy_consultations"
+
+    id = Column(Integer, primary_key=True, index=True)
+    chat_session_id = Column(Integer, ForeignKey("chat_sessions.id"), nullable=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)  # Optional for guest users
+
+    # Basic Info
+    source = Column(String(100), default="補助診斷士", nullable=False)
+    project_type = Column(String(50), nullable=True)  # 研發 or 行銷
+
+    # Contact Info
+    email = Column(String(255), nullable=True, index=True)
+    company_name = Column(String(255), nullable=True)
+    phone = Column(String(50), nullable=True)
+    consult = Column(Boolean, default=False)  # 是否需要諮詢
+
+    # Financial Data (stored in 元/TWD)
+    budget = Column(BigInteger, nullable=True)  # 預計所需經費 (元)
+    people = Column(Integer, nullable=True)  # 公司投保人數 (人)
+    capital = Column(BigInteger, nullable=True)  # 公司實收資本額 (元)
+    revenue = Column(BigInteger, nullable=True)  # 公司大約年度營業額 (元)
+    growth_revenue = Column(BigInteger, nullable=True)  # 預計行銷活動可帶來營業額成長 (元)
+
+    # Bonus Items (加分項目)
+    bonus_count = Column(Integer, default=0, nullable=True)  # 加分項目數量 (0-5)
+    bonus_details = Column(Text, nullable=True)  # 加分項目詳情 (comma separated)
+
+    # Marketing Type (for 行銷 projects)
+    marketing_type = Column(Text, nullable=True)  # 行銷方向 (comma separated: 內銷, 外銷)
+
+    # Calculation Results (stored in 元/TWD)
+    grant_min = Column(BigInteger, nullable=True)  # 補助最低值 (元)
+    grant_max = Column(BigInteger, nullable=True)  # 補助最高值 (元)
+    recommended_plans = Column(Text, nullable=True)  # 推薦方案名稱 (comma separated)
+
+    # Device & Tracking Info
+    device = Column(String(50), nullable=True)  # 裝置類型 (mobile, desktop, tablet)
+
+    # Timestamps
+    timestamp = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+    # Relationships
+    user = relationship("User", foreign_keys=[user_id])
+    chat_session = relationship("ChatSession", foreign_keys=[chat_session_id])
+
+    def to_dict(self):
+        """Convert model to dictionary"""
+        return {
+            "id": self.id,
+            "chat_session_id": self.chat_session_id,
+            "user_id": self.user_id,
+            "source": self.source,
+            "project_type": self.project_type,
+            "email": self.email,
+            "company_name": self.company_name,
+            "phone": self.phone,
+            "consult": self.consult,
+            "budget": self.budget,
+            "people": self.people,
+            "capital": self.capital,
+            "revenue": self.revenue,
+            "growth_revenue": self.growth_revenue,
+            "bonus_count": self.bonus_count,
+            "bonus_details": self.bonus_details,
+            "marketing_type": self.marketing_type,
+            "grant_min": self.grant_min,
+            "grant_max": self.grant_max,
+            "recommended_plans": self.recommended_plans,
+            "device": self.device,
+            "timestamp": self.timestamp.isoformat() if self.timestamp else None,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "updated_at": self.updated_at.isoformat() if self.updated_at else None
+        }
+
+    def to_export_format(self):
+        """Convert to export format with Chinese field names"""
+        return {
+            "時間戳": self.timestamp.strftime("%Y-%m-%d %H:%M:%S") if self.timestamp else None,
+            "來源": self.source,
+            "類型選擇": self.project_type,
+            "Email": self.email,
+            "公司行號": self.company_name,
+            "預計所需經費(元)": self.budget,
+            "公司投保人數(人)": self.people,
+            "公司實收資本額(元)": self.capital,
+            "公司大約年度營業額(元)": self.revenue,
+            "加分項目數量": self.bonus_count,
+            "加分項目詳情": self.bonus_details,
+            "行銷方向": self.marketing_type,
+            "預計行銷活動可帶來營業額成長(元)": self.growth_revenue,
+            "補助最低值(元)": self.grant_min,
+            "補助最高值(元)": self.grant_max,
+            "推薦方案名稱": self.recommended_plans,
+            "裝置類型": self.device,
+            "是否需要諮詢": self.consult,
+            "電話": self.phone
         }

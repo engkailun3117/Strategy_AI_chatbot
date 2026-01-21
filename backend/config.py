@@ -14,9 +14,9 @@ class Settings(BaseSettings):
     # External JWT Authentication (from main system)
     external_jwt_secret: str  # Shared secret key from main user system
 
-    # OpenAI Configuration
-    openai_api_key: str = ""
-    openai_model: str = "gpt-5-mini"  # Cost-effective and powerful
+    # Gemini AI Configuration
+    gemini_api_key: str
+    gemini_model: str = "gemini-2.5-flash"
 
     # Modern Pydantic V2 configuration
     model_config = SettingsConfigDict(
