@@ -5,11 +5,16 @@ Test script to verify Gemini API is working correctly
 import os
 from google import genai
 from google.genai import types
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
 
 # Get API key from environment
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 if not GEMINI_API_KEY:
-    print("❌ GEMINI_API_KEY not set in environment")
+    print("❌ GEMINI_API_KEY not set in environment or .env file")
+    print("   Please create a .env file with: GEMINI_API_KEY=your_api_key_here")
     exit(1)
 
 print(f"✅ API Key loaded: {GEMINI_API_KEY[:20]}...")
