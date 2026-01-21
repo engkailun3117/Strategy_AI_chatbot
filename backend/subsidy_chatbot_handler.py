@@ -6,7 +6,8 @@ Uses Google Gemini AI for intelligent conversation and data collection
 import json
 from typing import Dict, Any, Optional, List, Tuple
 from sqlalchemy.orm import Session
-import google.generativeai as genai
+from google import genai
+from google.genai import types
 from models import ChatSession, ChatMessage, SubsidyConsultation, ChatSessionStatus
 from config import get_settings
 from subsidy_calculator import calculate_subsidy
@@ -14,9 +15,15 @@ from subsidy_calculator import calculate_subsidy
 # Initialize settings
 settings = get_settings()
 
-# Configure Gemini API
-if settings.gemini_api_key:
-    genai.configure(api_key=settings.gemini_api_key)
+# Initialize Gemini client
+_gemini_client = None
+
+def get_gemini_client():
+    """Get or create Gemini client"""
+    global _gemini_client
+    if _gemini_client is None and settings.gemini_api_key:
+        _gemini_client = genai.Client(api_key=settings.gemini_api_key)
+    return _gemini_client
 
 
 class SubsidyChatbotHandler:
@@ -242,14 +249,46 @@ class SubsidyChatbotHandler:
                 }
             ]
 
-            # Initialize Gemini model
-            model = genai.GenerativeModel(
-                model_name=settings.gemini_model,
-                tools=tools
-            )
+            # Get Gemini client
+            client = get_gemini_client()
+            if not client:
+                return {
+                    "error": "Gemini API key not configured",
+                    "message": "抱歉，系統配置錯誤。請聯繫管理員。"
+                }
+
+            # Convert messages to new format
+            contents = []
+            for msg in messages:
+                content_parts = []
+                for part in msg["parts"]:
+                    content_parts.append(types.Part.from_text(part))
+                contents.append(types.Content(
+                    role=msg["role"],
+                    parts=content_parts
+                ))
+
+            # Convert tools to new format
+            tool_declarations = []
+            for tool in tools:
+                for func_decl in tool["function_declarations"]:
+                    tool_declarations.append(
+                        types.FunctionDeclaration(
+                            name=func_decl["name"],
+                            description=func_decl["description"],
+                            parameters=func_decl["parameters"]
+                        )
+                    )
 
             # Generate response
-            response = model.generate_content(messages)
+            response = client.models.generate_content(
+                model=settings.gemini_model,
+                contents=contents,
+                config=types.GenerateContentConfig(
+                    tools=[types.Tool(function_declarations=tool_declarations)],
+                    temperature=0.7
+                )
+            )
 
             result = {
                 "message": "",
@@ -261,19 +300,17 @@ class SubsidyChatbotHandler:
                 candidate = response.candidates[0]
 
                 # Check for function calls
-                if candidate.content.parts:
+                if candidate.content and candidate.content.parts:
                     for part in candidate.content.parts:
-                        if hasattr(part, 'function_call') and part.function_call:
+                        if part.function_call:
                             fc = part.function_call
-                            function_args = {}
-                            for key, value in fc.args.items():
-                                function_args[key] = value
+                            function_args = dict(fc.args) if fc.args else {}
 
                             result["function_calls"].append({
                                 "name": fc.name,
                                 "arguments": function_args
                             })
-                        elif hasattr(part, 'text') and part.text:
+                        elif part.text:
                             result["message"] += part.text
 
             return result
