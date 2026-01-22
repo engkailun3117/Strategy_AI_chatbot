@@ -383,6 +383,111 @@ class SubsidyChatbotHandler:
         self.consultation_data.bonus_count = len(bonus_items)
         self.consultation_data.bonus_details = ", ".join(bonus_items) if bonus_items else None
 
+    def _get_natural_confirmation(self) -> str:
+        """
+        Generate a natural, context-aware confirmation message based on recently updated field.
+        Uses variety to make the conversation feel more human and less robotic.
+        """
+        import random
+
+        # Refresh data to get latest values
+        self.db.refresh(self.consultation_data)
+
+        # Check what was just updated and create context-aware confirmations
+        if self.consultation_data.project_type and self.consultation_data.budget is None:
+            confirmations = [
+                f"收到！您選擇的是{self.consultation_data.project_type}類型的計畫。",
+                f"了解，{self.consultation_data.project_type}計畫。",
+                f"好的，我們來協助您評估{self.consultation_data.project_type}補助方案。"
+            ]
+            return random.choice(confirmations)
+
+        elif self.consultation_data.budget is not None and self.consultation_data.people is None:
+            budget_wan = self.consultation_data.budget // 10000
+            confirmations = [
+                f"明白了，預計經費約 {budget_wan} 萬元。",
+                f"收到！經費規模為 {budget_wan} 萬元。",
+                f"了解，您的預算是 {budget_wan} 萬元。"
+            ]
+            return random.choice(confirmations)
+
+        elif self.consultation_data.people is not None and self.consultation_data.capital is None:
+            confirmations = [
+                f"好的，貴公司有 {self.consultation_data.people} 位投保員工。",
+                f"收到！{self.consultation_data.people} 位員工的規模。",
+                f"了解，投保人數為 {self.consultation_data.people} 人。"
+            ]
+            return random.choice(confirmations)
+
+        elif self.consultation_data.capital is not None and self.consultation_data.revenue is None:
+            capital_wan = self.consultation_data.capital // 10000
+            confirmations = [
+                f"明白了，實收資本額為 {capital_wan} 萬元。",
+                f"收到！資本額 {capital_wan} 萬元。",
+                f"好的，已記錄資本額資訊。"
+            ]
+            return random.choice(confirmations)
+
+        elif self.consultation_data.revenue is not None and self.consultation_data.has_certification is None:
+            revenue_wan = self.consultation_data.revenue // 10000
+            confirmations = [
+                f"了解，年營業額約 {revenue_wan} 萬元。",
+                f"收到！營業額規模為 {revenue_wan} 萬元。",
+                f"好的，已記錄營收資料。"
+            ]
+            return random.choice(confirmations)
+
+        # For bonus items
+        elif self.consultation_data.has_certification is not None and self.consultation_data.has_gov_award is None:
+            if self.consultation_data.has_certification:
+                confirmations = ["太好了！有第三方認證會增加申請優勢。", "很好！認證是重要的加分項目。", "收到！認證資格已記錄。"]
+            else:
+                confirmations = ["了解，沒有第三方認證。", "明白了。", "收到！"]
+            return random.choice(confirmations)
+
+        elif self.consultation_data.has_gov_award is not None and self.consultation_data.is_mit is None:
+            if self.consultation_data.has_gov_award:
+                confirmations = ["很好！政府獎項是很大的加分。", "太棒了！有政府獎項認可。", "收到！獎項資格已記錄。"]
+            else:
+                confirmations = ["了解。", "明白了。", "收到！"]
+            return random.choice(confirmations)
+
+        elif self.consultation_data.is_mit is not None and self.consultation_data.has_industry_academia is None:
+            if self.consultation_data.is_mit:
+                confirmations = ["很好！MIT 產品有額外優勢。", "收到！MIT 生產已記錄。", "了解，在台灣生產。"]
+            else:
+                confirmations = ["了解。", "明白了。", "收到！"]
+            return random.choice(confirmations)
+
+        elif self.consultation_data.has_industry_academia is not None and self.consultation_data.has_factory_registration is None:
+            if self.consultation_data.has_industry_academia:
+                confirmations = ["太好了！產學合作是重要加分項。", "很好！有產學合作經驗。", "收到！產學合作已記錄。"]
+            else:
+                confirmations = ["了解。", "明白了。", "收到！"]
+            return random.choice(confirmations)
+
+        elif self.consultation_data.has_factory_registration is not None:
+            if self.consultation_data.has_factory_registration:
+                if self.consultation_data.project_type == "行銷" and not self.consultation_data.marketing_type:
+                    confirmations = ["很好！有工廠登記證。", "收到！工廠登記已記錄。", "了解，已有工廠登記。"]
+                else:
+                    confirmations = ["太好了！工廠登記證也會加分。", "很好！有完整的登記證明。", "收到！已記錄完所有加分項目。"]
+            else:
+                confirmations = ["了解。", "明白了。", "收到！"]
+            return random.choice(confirmations)
+
+        # For marketing type
+        elif self.consultation_data.marketing_type and self.consultation_data.growth_revenue is None:
+            confirmations = [
+                f"收到！您選擇的是{self.consultation_data.marketing_type}市場。",
+                f"了解，{self.consultation_data.marketing_type}導向的行銷計畫。",
+                f"明白了，以{self.consultation_data.marketing_type}為主。"
+            ]
+            return random.choice(confirmations)
+
+        # Default fallback
+        return random.choice(["好的！已記錄。", "收到！", "了解。", "明白了。"])
+
     def update_consultation_data(self, data: Dict[str, Any]) -> bool:
         """Update consultation data with extracted information"""
         try:
@@ -639,11 +744,12 @@ NT${calculation_result['grant_min']:,} ~ NT${calculation_result['grant_max']:,}
 
 感謝您使用我們的服務！祝您申請順利！🎉"""
         elif data_updated:
-            # When data was updated via function call, always generate our own consistent response
+            # When data was updated via function call, generate natural confirmation
             # with the next question to ensure proper conversation flow
-            # This prevents duplicate questions and ensures the next question is always included
+            # This prevents duplicate questions while maintaining natural conversation
+            confirmation = self._get_natural_confirmation()
             next_question = self.get_next_field_question()
-            response_message = f"好的！已記錄。\n\n{next_question}"
+            response_message = f"{confirmation}\n\n{next_question}"
         elif not response_message:
             # If no function was called and AI didn't provide a response,
             # ask the next question
