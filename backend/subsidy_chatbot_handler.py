@@ -137,8 +137,18 @@ class SubsidyChatbotHandler:
 
 重要提示：
 - **如果使用者主動提供多個資訊**，全部提取並記錄到 update_subsidy_data
-- 當收集完所有必要資料後，調用 calculate_subsidy 函數計算補助金額
 - 記住：調用函數時不要生成文字回應，讓系統自動處理對話流程
+
+✅ **資料確認流程（重要！）**：
+- **當收集完所有必要資料後，系統會自動顯示資料摘要並要求使用者確認**
+- 使用者會看到完整的資料清單
+- 如果使用者回覆「確認」、「正確」、「沒問題」、「可以」、「OK」等確認詞：
+  → 調用 confirm_data(confirmed=True) 函數
+- 如果使用者要求修改某項資料：
+  → 調用 update_subsidy_data 更新該欄位
+  → 系統會重新顯示摘要要求確認
+- **只有在使用者確認資料後，系統才會自動調用 calculate_subsidy 計算補助**
+- 絕對不要在使用者未確認資料時就計算補助
 
 🔄 **處理資料修改與更正**：
 - **如果使用者想要修改之前填寫的資料**，立即調用 update_subsidy_data 更新該欄位
@@ -264,8 +274,22 @@ class SubsidyChatbotHandler:
                             }
                         },
                         {
+                            "name": "confirm_data",
+                            "description": "使用者確認所有資料正確無誤。當使用者回覆「確認」、「正確」、「沒問題」、「可以」等確認詞時調用此函數。",
+                            "parameters": {
+                                "type": "object",
+                                "properties": {
+                                    "confirmed": {
+                                        "type": "boolean",
+                                        "description": "使用者是否確認資料正確"
+                                    }
+                                },
+                                "required": ["confirmed"]
+                            }
+                        },
+                        {
                             "name": "calculate_subsidy",
-                            "description": "計算補助金額並推薦方案。當所有必要資料收集完成後調用此函數。",
+                            "description": "計算補助金額並推薦方案。當使用者確認資料後才能調用此函數。",
                             "parameters": {
                                 "type": "object",
                                 "properties": {
@@ -708,7 +732,19 @@ class SubsidyChatbotHandler:
             if self.consultation_data.growth_revenue is None:
                 return "請問您預計行銷活動可帶來的營業額成長是多少？（請以萬元為單位）"
 
-        # All required fields collected
+        # All required fields collected - show summary and ask for confirmation
+        if not self.consultation_data.data_confirmed:
+            summary = self.get_current_data_summary()
+            return f"""太好了！我已經收集完所有資料。
+
+請確認以下資訊是否正確：
+
+{summary}
+
+如果以上資料都正確，請回覆「確認」或「正確」，我將為您計算補助方案。
+如果需要修改任何資料，請直接告訴我要修改的項目。"""
+
+        # Data confirmed, ready to calculate
         return "資料收集完成！讓我為您計算適合的補助方案..."
 
     def process_message(self, user_message: str) -> Tuple[str, bool]:
@@ -740,12 +776,28 @@ class SubsidyChatbotHandler:
                 if call["name"] == "update_subsidy_data":
                     if self.update_consultation_data(call["arguments"]):
                         data_updated = True
+                elif call["name"] == "confirm_data":
+                    # User confirmed the data is correct
+                    if call["arguments"].get("confirmed", False):
+                        self.consultation_data.data_confirmed = True
+                        self.db.commit()
+                        # Automatically trigger calculation after confirmation
+                        success, calc_result = self.calculate_and_save_subsidy()
+                        if success:
+                            calculation_done = True
+                            calculation_result = calc_result
+                            completed = True
                 elif call["name"] == "calculate_subsidy":
-                    success, calc_result = self.calculate_and_save_subsidy()
-                    if success:
-                        calculation_done = True
-                        calculation_result = calc_result
-                        completed = True
+                    # Only calculate if data has been confirmed
+                    if self.consultation_data.data_confirmed:
+                        success, calc_result = self.calculate_and_save_subsidy()
+                        if success:
+                            calculation_done = True
+                            calculation_result = calc_result
+                            completed = True
+                    else:
+                        # Data not confirmed yet, don't calculate
+                        print("⚠️ Warning: calculate_subsidy called but data not confirmed yet")
 
         # Build response message
         response_message = ai_result.get("message", "")

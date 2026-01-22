@@ -118,6 +118,7 @@ class SubsidyConsultation(Base):
     # Basic Info
     source = Column(String(100), default="補助診斷士", nullable=False)
     project_type = Column(String(50), nullable=True)  # 研發 or 行銷
+    data_confirmed = Column(Boolean, default=False, nullable=True)  # 使用者是否確認資料正確
 
     # Financial Data (stored in 元/TWD)
     budget = Column(BigInteger, nullable=True)  # 預計所需經費 (元)
@@ -162,6 +163,7 @@ class SubsidyConsultation(Base):
             "user_id": self.user_id,
             "source": self.source,
             "project_type": self.project_type,
+            "data_confirmed": self.data_confirmed,
             "budget": self.budget,
             "people": self.people,
             "capital": self.capital,
