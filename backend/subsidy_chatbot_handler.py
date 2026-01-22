@@ -35,6 +35,7 @@ class SubsidyChatbotHandler:
         self.session_id = session_id
         self.session = None
         self.consultation_data = None
+        self._corrected_fields = []  # Track fields that were corrected/updated
 
         # Load or create session
         if session_id:
@@ -138,6 +139,15 @@ class SubsidyChatbotHandler:
 - **如果使用者主動提供多個資訊**，全部提取並記錄到 update_subsidy_data
 - 當收集完所有必要資料後，調用 calculate_subsidy 函數計算補助金額
 - 記住：調用函數時不要生成文字回應，讓系統自動處理對話流程
+
+🔄 **處理資料修改與更正**：
+- **如果使用者想要修改之前填寫的資料**，立即調用 update_subsidy_data 更新該欄位
+- 修改關鍵詞包括：「修改」、「更正」、「改成」、「應該是」、「不對」、「錯了」、「重新」等
+- 例如：
+  - 使用者說「等等，預算應該是1000萬」→ 調用 update_subsidy_data(budget=10000000)
+  - 使用者說「我想修改公司人數，應該是50人」→ 調用 update_subsidy_data(people=50)
+  - 使用者說「剛剛說錯了，是研發不是行銷」→ 調用 update_subsidy_data(project_type="研發")
+- 修改後系統會自動確認並繼續流程，不需要重新詢問所有問題
 
 📋 **查詢已收集的資料**：
 - 當使用者詢問目前進度或已填資料時，從「目前已收集的資料」中提取並展示
@@ -387,11 +397,37 @@ class SubsidyChatbotHandler:
         """
         Generate a natural, context-aware confirmation message based on recently updated field.
         Uses variety to make the conversation feel more human and less robotic.
+        Recognizes corrections and provides appropriate feedback.
         """
         import random
 
         # Refresh data to get latest values
         self.db.refresh(self.consultation_data)
+
+        # If this was a correction, generate update-specific confirmation
+        if hasattr(self, '_corrected_fields') and self._corrected_fields:
+            field = self._corrected_fields[0]  # Get the first corrected field
+
+            if field == "project_type":
+                return f"好的，已更新為「{self.consultation_data.project_type}」計畫類型。"
+            elif field == "budget":
+                budget_wan = self.consultation_data.budget // 10000
+                return f"了解，已將經費更新為 {budget_wan} 萬元。"
+            elif field == "people":
+                return f"好的，已將投保人數更新為 {self.consultation_data.people} 人。"
+            elif field == "capital":
+                capital_wan = self.consultation_data.capital // 10000
+                return f"收到，已將資本額更新為 {capital_wan} 萬元。"
+            elif field == "revenue":
+                revenue_wan = self.consultation_data.revenue // 10000
+                return f"明白，已將營業額更新為 {revenue_wan} 萬元。"
+            elif field in ["has_certification", "has_gov_award", "is_mit", "has_industry_academia", "has_factory_registration"]:
+                return "好的，已更新您的回答。"
+            elif field == "marketing_type":
+                return f"了解，已將行銷方向更新為「{self.consultation_data.marketing_type}」。"
+            elif field == "growth_revenue":
+                growth_wan = self.consultation_data.growth_revenue // 10000
+                return f"收到，已將預計營業額成長更新為 {growth_wan} 萬元。"
 
         # Check what was just updated and create context-aware confirmations
         if self.consultation_data.project_type and self.consultation_data.budget is None:
@@ -489,56 +525,85 @@ class SubsidyChatbotHandler:
         return random.choice(["好的！已記錄。", "收到！", "了解。", "明白了。"])
 
     def update_consultation_data(self, data: Dict[str, Any]) -> bool:
-        """Update consultation data with extracted information"""
+        """
+        Update consultation data with extracted information.
+        Returns True if any field was updated.
+        Stores list of corrected fields in self._corrected_fields for natural responses.
+        """
         try:
             updated = False
+            self._corrected_fields = []  # Track which fields were corrections
 
             if "project_type" in data and data["project_type"]:
+                if self.consultation_data.project_type and self.consultation_data.project_type != data["project_type"]:
+                    self._corrected_fields.append("project_type")
                 self.consultation_data.project_type = data["project_type"]
                 updated = True
 
             if "budget" in data and data["budget"] is not None:
+                if self.consultation_data.budget and self.consultation_data.budget != int(data["budget"]):
+                    self._corrected_fields.append("budget")
                 self.consultation_data.budget = int(data["budget"])
                 updated = True
 
             if "people" in data and data["people"] is not None:
+                if self.consultation_data.people and self.consultation_data.people != int(data["people"]):
+                    self._corrected_fields.append("people")
                 self.consultation_data.people = int(data["people"])
                 updated = True
 
             if "capital" in data and data["capital"] is not None:
+                if self.consultation_data.capital and self.consultation_data.capital != int(data["capital"]):
+                    self._corrected_fields.append("capital")
                 self.consultation_data.capital = int(data["capital"])
                 updated = True
 
             if "revenue" in data and data["revenue"] is not None:
+                if self.consultation_data.revenue and self.consultation_data.revenue != int(data["revenue"]):
+                    self._corrected_fields.append("revenue")
                 self.consultation_data.revenue = int(data["revenue"])
                 updated = True
 
             # Handle individual bonus items (boolean fields)
             if "has_certification" in data and data["has_certification"] is not None:
+                if self.consultation_data.has_certification is not None and self.consultation_data.has_certification != bool(data["has_certification"]):
+                    self._corrected_fields.append("has_certification")
                 self.consultation_data.has_certification = bool(data["has_certification"])
                 updated = True
 
             if "has_gov_award" in data and data["has_gov_award"] is not None:
+                if self.consultation_data.has_gov_award is not None and self.consultation_data.has_gov_award != bool(data["has_gov_award"]):
+                    self._corrected_fields.append("has_gov_award")
                 self.consultation_data.has_gov_award = bool(data["has_gov_award"])
                 updated = True
 
             if "is_mit" in data and data["is_mit"] is not None:
+                if self.consultation_data.is_mit is not None and self.consultation_data.is_mit != bool(data["is_mit"]):
+                    self._corrected_fields.append("is_mit")
                 self.consultation_data.is_mit = bool(data["is_mit"])
                 updated = True
 
             if "has_industry_academia" in data and data["has_industry_academia"] is not None:
+                if self.consultation_data.has_industry_academia is not None and self.consultation_data.has_industry_academia != bool(data["has_industry_academia"]):
+                    self._corrected_fields.append("has_industry_academia")
                 self.consultation_data.has_industry_academia = bool(data["has_industry_academia"])
                 updated = True
 
             if "has_factory_registration" in data and data["has_factory_registration"] is not None:
+                if self.consultation_data.has_factory_registration is not None and self.consultation_data.has_factory_registration != bool(data["has_factory_registration"]):
+                    self._corrected_fields.append("has_factory_registration")
                 self.consultation_data.has_factory_registration = bool(data["has_factory_registration"])
                 updated = True
 
             if "marketing_type" in data and data["marketing_type"]:
+                if self.consultation_data.marketing_type and self.consultation_data.marketing_type != str(data["marketing_type"]):
+                    self._corrected_fields.append("marketing_type")
                 self.consultation_data.marketing_type = str(data["marketing_type"])
                 updated = True
 
             if "growth_revenue" in data and data["growth_revenue"] is not None:
+                if self.consultation_data.growth_revenue and self.consultation_data.growth_revenue != int(data["growth_revenue"]):
+                    self._corrected_fields.append("growth_revenue")
                 self.consultation_data.growth_revenue = int(data["growth_revenue"])
                 updated = True
 
