@@ -200,6 +200,17 @@
             border-left: 4px solid #dc3545;
         }
 
+        .info-message {
+            background: #d1ecf1;
+            color: #0c5460;
+            padding: 15px 20px;
+            margin: 20px;
+            border-radius: 10px;
+            border-left: 4px solid #17a2b8;
+            text-align: center;
+            font-size: 14px;
+        }
+
         .new-session-btn {
             background: #6c757d;
             color: white;
@@ -230,7 +241,7 @@
             </div>
             <div style="display: flex; gap: 10px; align-items: center;">
                 <span class="progress" id="progressDisplay">0/6</span>
-                <button class="new-session-btn" onclick="startNewSession()">🆕 New Session</button>
+                <button class="new-session-btn" onclick="handleNewSessionClick()">🆕 New Session</button>
             </div>
         </div>
 
@@ -251,6 +262,7 @@
         const JWT_TOKEN = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoidGVzdF91c2VyXzAwMSIsInVzZXJuYW1lIjoiVGVzdCBVc2VyIiwiZXhwIjoxODAwNTEyNzk1fQ.8dL2ItZsR9H_wkBRAvUW634ZwNIGCTUDObvdxCC1Asc';
 
         let currentSessionId = null;
+        let isFirstTimeUser = false;
 
         function updateSessionInfo() {
             document.getElementById('sessionIdDisplay').textContent = currentSessionId || '-';
@@ -263,9 +275,132 @@
             }
         }
 
-        async function startNewSession() {
+        async function loadLatestSession() {
             try {
-                const response = await fetch(`${API_URL}/api/subsidy/sessions/new`, {
+                // Try to get the latest active session
+                const response = await fetch(`${API_URL}/api/subsidy/sessions/latest`, {
+                    method: 'GET',
+                    headers: {
+                        'Authorization': `Bearer ${JWT_TOKEN}`,
+                        'Content-Type': 'application/json'
+                    }
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+
+                    if (data.session_id) {
+                        // Found an existing session
+                        currentSessionId = data.session_id;
+                        isFirstTimeUser = false;
+
+                        console.log(`✓ Loaded existing session: ${currentSessionId}`);
+
+                        // Load the chat history
+                        await loadChatHistory(currentSessionId);
+
+                        // Load consultation data to update progress
+                        await loadConsultationData(currentSessionId);
+
+                        updateSessionInfo();
+
+                        // Show info message
+                        showInfoMessage(`已載入您的上次對話 (Session #${currentSessionId})`);
+                    } else {
+                        // No existing session - this is first time user
+                        isFirstTimeUser = true;
+                        console.log('✓ First time user detected');
+
+                        // Show welcome for first time user
+                        showInfoMessage('歡迎！這是您第一次使用補助診斷助理。');
+
+                        // Start new session for first time user
+                        await startNewSession();
+                    }
+                }
+            } catch (error) {
+                console.error('Error loading latest session:', error);
+                showError(`載入對話失敗: ${error.message}`);
+
+                // Fallback: create new session
+                await startNewSession();
+            }
+        }
+
+        async function loadChatHistory(sessionId) {
+            try {
+                const response = await fetch(`${API_URL}/api/subsidy/sessions/${sessionId}/messages`, {
+                    method: 'GET',
+                    headers: {
+                        'Authorization': `Bearer ${JWT_TOKEN}`,
+                        'Content-Type': 'application/json'
+                    }
+                });
+
+                if (response.ok) {
+                    const messages = await response.json();
+
+                    // Clear chat container
+                    document.getElementById('chatContainer').innerHTML = '';
+
+                    // Add all messages to chat
+                    messages.forEach(msg => {
+                        addMessage(msg.role, msg.content, false); // false = don't scroll on each message
+                    });
+
+                    // Scroll to bottom after all messages loaded
+                    const chatContainer = document.getElementById('chatContainer');
+                    chatContainer.scrollTop = chatContainer.scrollHeight;
+
+                    console.log(`✓ Loaded ${messages.length} messages from session ${sessionId}`);
+                }
+            } catch (error) {
+                console.error('Error loading chat history:', error);
+            }
+        }
+
+        async function loadConsultationData(sessionId) {
+            try {
+                const response = await fetch(`${API_URL}/api/subsidy/consultations/${sessionId}`, {
+                    method: 'GET',
+                    headers: {
+                        'Authorization': `Bearer ${JWT_TOKEN}`,
+                        'Content-Type': 'application/json'
+                    }
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+
+                    // Calculate progress manually
+                    let completed = 0;
+                    const total = 6; // project_type, budget, people, capital, revenue, bonus
+
+                    if (data.project_type) completed++;
+                    if (data.budget !== null) completed++;
+                    if (data.people !== null) completed++;
+                    if (data.capital !== null) completed++;
+                    if (data.revenue !== null) completed++;
+                    if (data.bonus_count !== null && data.bonus_count > 0) completed++;
+
+                    updateProgress({ fields_completed: completed, total_fields: total });
+                }
+            } catch (error) {
+                console.error('Error loading consultation data:', error);
+            }
+        }
+
+        async function startNewSession(preservePreviousData = false) {
+            try {
+                const previousSessionId = preservePreviousData ? currentSessionId : null;
+
+                // Build URL with optional query parameter
+                let url = `${API_URL}/api/subsidy/sessions/new`;
+                if (previousSessionId) {
+                    url += `?previous_session_id=${previousSessionId}`;
+                }
+
+                const response = await fetch(url, {
                     method: 'POST',
                     headers: {
                         'Authorization': `Bearer ${JWT_TOKEN}`,
@@ -275,10 +410,17 @@
 
                 if (response.ok) {
                     const data = await response.json();
+                    const oldSessionId = currentSessionId;
                     currentSessionId = data.session_id;
 
                     // Clear chat
                     document.getElementById('chatContainer').innerHTML = '';
+
+                    if (preservePreviousData && oldSessionId) {
+                        showInfoMessage(`已開始新對話並保留先前資料 (Session #${oldSessionId} → #${currentSessionId})`);
+                    } else {
+                        showInfoMessage(`已開始新對話 (Session #${currentSessionId})`);
+                    }
 
                     // Add welcome message
                     addMessage('assistant', data.message);
@@ -293,7 +435,7 @@
             }
         }
 
-        function addMessage(role, content) {
+        function addMessage(role, content, shouldScroll = true) {
             const chatContainer = document.getElementById('chatContainer');
             const messageDiv = document.createElement('div');
             messageDiv.className = `message ${role}`;
@@ -306,7 +448,10 @@
             `;
 
             chatContainer.appendChild(messageDiv);
-            chatContainer.scrollTop = chatContainer.scrollHeight;
+
+            if (shouldScroll) {
+                chatContainer.scrollTop = chatContainer.scrollHeight;
+            }
         }
 
         function showError(message) {
@@ -316,6 +461,30 @@
             errorDiv.textContent = message;
             chatContainer.appendChild(errorDiv);
             chatContainer.scrollTop = chatContainer.scrollHeight;
+        }
+
+        function showInfoMessage(message) {
+            const chatContainer = document.getElementById('chatContainer');
+            const infoDiv = document.createElement('div');
+            infoDiv.className = 'info-message';
+            infoDiv.textContent = message;
+            chatContainer.appendChild(infoDiv);
+            chatContainer.scrollTop = chatContainer.scrollHeight;
+        }
+
+        async function handleNewSessionClick() {
+            if (currentSessionId) {
+                // Ask user if they want to preserve data
+                const preserve = confirm(
+                    '是否要將目前填寫的資料帶入新對話？\n\n' +
+                    '• 點「確定」= 保留資料，繼續使用\n' +
+                    '• 點「取消」= 清空資料，重新開始'
+                );
+                await startNewSession(preserve);
+            } else {
+                // No current session, just start new
+                await startNewSession(false);
+            }
         }
 
         async function sendMessage() {
@@ -384,9 +553,9 @@
             }
         }
 
-        // Auto-start session on load
+        // Auto-load latest session on page load
         window.onload = function() {
-            startNewSession();
+            loadLatestSession();
         };
     </script>
 </body>
