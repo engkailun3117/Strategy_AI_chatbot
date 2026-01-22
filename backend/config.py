@@ -16,7 +16,7 @@ class Settings(BaseSettings):
 
     # Gemini AI Configuration
     gemini_api_key: str
-    gemini_model: str = "gemini-2.5-flash"
+    gemini_model: str = "gemini-3-flash-preview"
 
     # Modern Pydantic V2 configuration
     model_config = SettingsConfigDict(
