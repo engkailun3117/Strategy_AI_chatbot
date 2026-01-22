@@ -126,7 +126,14 @@ class SubsidyConsultation(Base):
     revenue = Column(BigInteger, nullable=True)  # 公司大約年度營業額 (元)
     growth_revenue = Column(BigInteger, nullable=True)  # 預計行銷活動可帶來營業額成長 (元)
 
-    # Bonus Items (加分項目)
+    # Bonus Items (加分項目) - Individual boolean flags
+    has_certification = Column(Boolean, nullable=True)  # 是否產品／服務取得第三方認證
+    has_gov_award = Column(Boolean, nullable=True)  # 是否取得政府相關獎項
+    is_mit = Column(Boolean, nullable=True)  # 產品是否為 MIT 生產
+    has_industry_academia = Column(Boolean, nullable=True)  # 是否有做產學合作
+    has_factory_registration = Column(Boolean, nullable=True)  # 是否有工廠登記證
+
+    # Legacy bonus fields (kept for backward compatibility)
     bonus_count = Column(Integer, default=0, nullable=True)  # 加分項目數量 (0-5)
     bonus_details = Column(Text, nullable=True)  # 加分項目詳情 (comma separated)
 
@@ -160,6 +167,11 @@ class SubsidyConsultation(Base):
             "capital": self.capital,
             "revenue": self.revenue,
             "growth_revenue": self.growth_revenue,
+            "has_certification": self.has_certification,
+            "has_gov_award": self.has_gov_award,
+            "is_mit": self.is_mit,
+            "has_industry_academia": self.has_industry_academia,
+            "has_factory_registration": self.has_factory_registration,
             "bonus_count": self.bonus_count,
             "bonus_details": self.bonus_details,
             "marketing_type": self.marketing_type,
@@ -181,6 +193,11 @@ class SubsidyConsultation(Base):
             "公司投保人數(人)": self.people,
             "公司實收資本額(元)": self.capital,
             "公司大約年度營業額(元)": self.revenue,
+            "產品／服務取得第三方認證": "是" if self.has_certification else "否",
+            "取得政府相關獎項": "是" if self.has_gov_award else "否",
+            "產品為 MIT 生產": "是" if self.is_mit else "否",
+            "有做產學合作": "是" if self.has_industry_academia else "否",
+            "有工廠登記證": "是" if self.has_factory_registration else "否",
             "加分項目數量": self.bonus_count,
             "加分項目詳情": self.bonus_details,
             "行銷方向": self.marketing_type,

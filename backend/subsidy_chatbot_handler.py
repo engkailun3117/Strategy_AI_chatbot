@@ -108,12 +108,19 @@ class SubsidyChatbotHandler:
    - 公司投保人數（人）
    - 公司實收資本額（萬元）
    - 公司年度營業額（萬元）
-   - 加分項目（最多5項）
+   - 加分項目（逐一詢問以下5項）：
+     1. 是否產品／服務取得第三方認證（是/否）
+     2. 是否取得政府相關獎項（是/否）
+     3. 產品是否為 MIT 生產（是/否）
+     4. 是否有做產學合作（是/否）
+     5. 是否有工廠登記證（是/否）
    - 【僅行銷】行銷方向（內銷/外銷）
    - 【僅行銷】預計營業額成長（萬元）
 
 2. **使用者回答後，立即調用 update_subsidy_data 函數**
    例如：使用者說「行銷」→ 調用 update_subsidy_data(project_type="行銷")
+   例如：使用者說「是」（回答加分項目）→ 調用 update_subsidy_data(has_certification=True)
+   例如：使用者說「否」（回答加分項目）→ 調用 update_subsidy_data(has_certification=False)
    不需要額外的文字回應，系統會自動處理
 
 3. **只在以下情況才需要文字回應**：
@@ -215,13 +222,25 @@ class SubsidyChatbotHandler:
                                         "type": "integer",
                                         "description": "公司年度營業額（單位：元）"
                                     },
-                                    "bonus_count": {
-                                        "type": "integer",
-                                        "description": "加分項目數量 (0-5)"
+                                    "has_certification": {
+                                        "type": "boolean",
+                                        "description": "是否產品／服務取得第三方認證"
                                     },
-                                    "bonus_details": {
-                                        "type": "string",
-                                        "description": "加分項目詳情"
+                                    "has_gov_award": {
+                                        "type": "boolean",
+                                        "description": "是否取得政府相關獎項"
+                                    },
+                                    "is_mit": {
+                                        "type": "boolean",
+                                        "description": "產品是否為 MIT 生產"
+                                    },
+                                    "has_industry_academia": {
+                                        "type": "boolean",
+                                        "description": "是否有做產學合作"
+                                    },
+                                    "has_factory_registration": {
+                                        "type": "boolean",
+                                        "description": "是否有工廠登記證"
                                     },
                                     "marketing_type": {
                                         "type": "string",
@@ -342,6 +361,28 @@ class SubsidyChatbotHandler:
                 "message": "抱歉，我遇到了一些技術問題。請稍後再試。"
             }
 
+    def _update_bonus_count_and_details(self):
+        """Calculate bonus_count and bonus_details from individual boolean fields"""
+        bonus_items = []
+
+        if self.consultation_data.has_certification:
+            bonus_items.append("產品／服務取得第三方認證")
+
+        if self.consultation_data.has_gov_award:
+            bonus_items.append("取得政府相關獎項")
+
+        if self.consultation_data.is_mit:
+            bonus_items.append("產品為 MIT 生產")
+
+        if self.consultation_data.has_industry_academia:
+            bonus_items.append("有做產學合作")
+
+        if self.consultation_data.has_factory_registration:
+            bonus_items.append("有工廠登記證")
+
+        self.consultation_data.bonus_count = len(bonus_items)
+        self.consultation_data.bonus_details = ", ".join(bonus_items) if bonus_items else None
+
     def update_consultation_data(self, data: Dict[str, Any]) -> bool:
         """Update consultation data with extracted information"""
         try:
@@ -367,12 +408,25 @@ class SubsidyChatbotHandler:
                 self.consultation_data.revenue = int(data["revenue"])
                 updated = True
 
-            if "bonus_count" in data and data["bonus_count"] is not None:
-                self.consultation_data.bonus_count = int(data["bonus_count"])
+            # Handle individual bonus items (boolean fields)
+            if "has_certification" in data and data["has_certification"] is not None:
+                self.consultation_data.has_certification = bool(data["has_certification"])
                 updated = True
 
-            if "bonus_details" in data and data["bonus_details"]:
-                self.consultation_data.bonus_details = str(data["bonus_details"])
+            if "has_gov_award" in data and data["has_gov_award"] is not None:
+                self.consultation_data.has_gov_award = bool(data["has_gov_award"])
+                updated = True
+
+            if "is_mit" in data and data["is_mit"] is not None:
+                self.consultation_data.is_mit = bool(data["is_mit"])
+                updated = True
+
+            if "has_industry_academia" in data and data["has_industry_academia"] is not None:
+                self.consultation_data.has_industry_academia = bool(data["has_industry_academia"])
+                updated = True
+
+            if "has_factory_registration" in data and data["has_factory_registration"] is not None:
+                self.consultation_data.has_factory_registration = bool(data["has_factory_registration"])
                 updated = True
 
             if "marketing_type" in data and data["marketing_type"]:
@@ -383,7 +437,9 @@ class SubsidyChatbotHandler:
                 self.consultation_data.growth_revenue = int(data["growth_revenue"])
                 updated = True
 
+            # Auto-calculate bonus_count and bonus_details from individual boolean fields
             if updated:
+                self._update_bonus_count_and_details()
                 self.db.commit()
 
             return updated
@@ -460,8 +516,21 @@ class SubsidyChatbotHandler:
         if self.consultation_data.revenue is None:
             return "請問貴公司大約的年度營業額是多少？（請以萬元為單位）"
 
-        if self.consultation_data.bonus_count is None or self.consultation_data.bonus_count == 0:
-            return "請問貴公司有哪些加分項目？（例如：專利、認證、技術創新等，最多5項）"
+        # Ask bonus items one by one
+        if self.consultation_data.has_certification is None:
+            return "請問貴公司的產品／服務是否取得第三方認證？（請回答「是」或「否」）"
+
+        if self.consultation_data.has_gov_award is None:
+            return "請問貴公司是否取得政府相關獎項？（請回答「是」或「否」）"
+
+        if self.consultation_data.is_mit is None:
+            return "請問貴公司的產品是否為 MIT 生產？（請回答「是」或「否」）"
+
+        if self.consultation_data.has_industry_academia is None:
+            return "請問貴公司是否有做產學合作？（請回答「是」或「否」）"
+
+        if self.consultation_data.has_factory_registration is None:
+            return "請問貴公司是否有工廠登記證？（請回答「是」或「否」）"
 
         if self.consultation_data.project_type == "行銷":
             if not self.consultation_data.marketing_type:
