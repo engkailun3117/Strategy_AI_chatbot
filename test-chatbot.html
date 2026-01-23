@@ -287,6 +287,26 @@
             }
         }
 
+        function disableInput(placeholderText) {
+            const messageInput = document.getElementById('messageInput');
+            const sendButton = document.getElementById('sendButton');
+            messageInput.disabled = true;
+            messageInput.placeholder = placeholderText || '此諮詢已完成';
+            messageInput.style.backgroundColor = '#f0f0f0';
+            sendButton.disabled = true;
+            sendButton.style.opacity = '0.5';
+        }
+
+        function enableInput() {
+            const messageInput = document.getElementById('messageInput');
+            const sendButton = document.getElementById('sendButton');
+            messageInput.disabled = false;
+            messageInput.placeholder = '輸入訊息...';
+            messageInput.style.backgroundColor = '';
+            sendButton.disabled = false;
+            sendButton.style.opacity = '1';
+        }
+
         async function loadLatestSession() {
             try {
                 // Try to get the latest active session
@@ -319,9 +339,12 @@
 
                         // Show info message based on session status
                         if (currentSessionStatus === 'COMPLETED') {
-                            showInfoMessage(`已載入您的諮詢結果 (Session #${currentSessionId}) - 您可以查看之前的對話或開始新諮詢`);
+                            showInfoMessage(`已載入您的諮詢結果 (Session #${currentSessionId}) - 此諮詢已完成，點擊「New Session」開始新諮詢`);
+                            // Disable input for completed sessions
+                            disableInput('此諮詢已完成。請點擊「🆕 New Session」開始新的諮詢。');
                         } else {
                             showInfoMessage(`已載入您的上次對話 (Session #${currentSessionId}) - 請繼續完成諮詢`);
+                            enableInput();
                         }
                     } else {
                         // No existing session - this is first time user
@@ -443,6 +466,9 @@
                     // Add welcome message
                     addMessage('assistant', data.message);
                     updateSessionInfo();
+
+                    // Re-enable input for new session
+                    enableInput();
                     updateProgress(data.progress);
                 } else {
                     const error = await response.json();
@@ -492,12 +518,26 @@
 
         async function handleNewSessionClick() {
             if (currentSessionId) {
-                // Ask user if they want to preserve data
-                const preserve = confirm(
-                    '是否要將目前填寫的資料帶入新對話？\n\n' +
-                    '• 點「確定」= 保留資料，繼續使用\n' +
-                    '• 點「取消」= 清空資料，重新開始'
-                );
+                let preserve = false;
+
+                // If current session is COMPLETED, default to fresh start
+                // and show different dialog
+                if (currentSessionStatus === 'COMPLETED') {
+                    preserve = confirm(
+                        '開始新的補助諮詢\n\n' +
+                        '目前諮詢已完成。您想要：\n\n' +
+                        '• 點「確定」= 保留之前填寫的公司資料（如資本額、人數等），節省時間\n' +
+                        '• 點「取消」= 完全重新開始，清空所有資料（推薦）'
+                    );
+                } else {
+                    // Session is still ACTIVE
+                    preserve = confirm(
+                        '是否要將目前填寫的資料帶入新對話？\n\n' +
+                        '• 點「確定」= 保留資料，繼續使用\n' +
+                        '• 點「取消」= 清空資料，重新開始'
+                    );
+                }
+
                 await startNewSession(preserve);
             } else {
                 // No current session, just start new
@@ -553,7 +593,8 @@
                         console.log('Consultation completed!');
                         currentSessionStatus = 'COMPLETED';
                         updateSessionInfo();
-                        showInfoMessage('諮詢已完成！您可以查看結果或開始新的諮詢。');
+                        disableInput('諮詢已完成。點擊「🆕 New Session」開始新諮詢。');
+                        showInfoMessage('✅ 諮詢已完成！您可以點擊「🆕 New Session」開始新的補助評估。');
                     }
                 } else {
                     const error = await response.json();
