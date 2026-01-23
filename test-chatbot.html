@@ -236,8 +236,9 @@
         </div>
 
         <div class="session-info" id="sessionInfo">
-            <div>
+            <div style="display: flex; gap: 15px; align-items: center;">
                 <span class="session-id">Session ID: <strong id="sessionIdDisplay">-</strong></span>
+                <span id="statusDisplay" style="font-size: 0.9em;"></span>
             </div>
             <div style="display: flex; gap: 10px; align-items: center;">
                 <span class="progress" id="progressDisplay">0/6</span>
@@ -262,10 +263,21 @@
         const JWT_TOKEN = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoidGVzdF91c2VyXzAwMSIsInVzZXJuYW1lIjoiVGVzdCBVc2VyIiwiZXhwIjoxODAwNTEyNzk1fQ.8dL2ItZsR9H_wkBRAvUW634ZwNIGCTUDObvdxCC1Asc';
 
         let currentSessionId = null;
+        let currentSessionStatus = null;
         let isFirstTimeUser = false;
 
         function updateSessionInfo() {
             document.getElementById('sessionIdDisplay').textContent = currentSessionId || '-';
+
+            // Update status display
+            const statusDisplay = document.getElementById('statusDisplay');
+            if (statusDisplay && currentSessionStatus) {
+                const statusText = currentSessionStatus === 'COMPLETED' ? '✓ 已完成' : '進行中';
+                const statusColor = currentSessionStatus === 'COMPLETED' ? '#28a745' : '#007bff';
+                statusDisplay.textContent = statusText;
+                statusDisplay.style.color = statusColor;
+                statusDisplay.style.fontWeight = 'bold';
+            }
         }
 
         function updateProgress(progress) {
@@ -292,9 +304,10 @@
                     if (data.session_id) {
                         // Found an existing session
                         currentSessionId = data.session_id;
+                        currentSessionStatus = data.status;
                         isFirstTimeUser = false;
 
-                        console.log(`✓ Loaded existing session: ${currentSessionId}`);
+                        console.log(`✓ Loaded existing session: ${currentSessionId} (Status: ${currentSessionStatus})`);
 
                         // Load the chat history
                         await loadChatHistory(currentSessionId);
@@ -304,8 +317,12 @@
 
                         updateSessionInfo();
 
-                        // Show info message
-                        showInfoMessage(`已載入您的上次對話 (Session #${currentSessionId})`);
+                        // Show info message based on session status
+                        if (currentSessionStatus === 'COMPLETED') {
+                            showInfoMessage(`已載入您的諮詢結果 (Session #${currentSessionId}) - 您可以查看之前的對話或開始新諮詢`);
+                        } else {
+                            showInfoMessage(`已載入您的上次對話 (Session #${currentSessionId}) - 請繼續完成諮詢`);
+                        }
                     } else {
                         // No existing session - this is first time user
                         isFirstTimeUser = true;
@@ -412,6 +429,7 @@
                     const data = await response.json();
                     const oldSessionId = currentSessionId;
                     currentSessionId = data.session_id;
+                    currentSessionStatus = 'ACTIVE'; // New sessions are always ACTIVE
 
                     // Clear chat
                     document.getElementById('chatContainer').innerHTML = '';
@@ -533,6 +551,9 @@
                     // Check if completed
                     if (data.completed) {
                         console.log('Consultation completed!');
+                        currentSessionStatus = 'COMPLETED';
+                        updateSessionInfo();
+                        showInfoMessage('諮詢已完成！您可以查看結果或開始新的諮詢。');
                     }
                 } else {
                     const error = await response.json();

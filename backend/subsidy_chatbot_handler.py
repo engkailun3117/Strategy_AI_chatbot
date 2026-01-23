@@ -4,6 +4,7 @@ Uses Google Gemini AI for intelligent conversation and data collection
 """
 
 import json
+from datetime import datetime
 from typing import Dict, Any, Optional, List, Tuple
 from sqlalchemy.orm import Session
 from google import genai
@@ -682,6 +683,7 @@ class SubsidyChatbotHandler:
 
             # Mark session as completed
             self.session.status = ChatSessionStatus.COMPLETED
+            self.session.completed_at = datetime.utcnow()
             self.db.commit()
 
             return True, result

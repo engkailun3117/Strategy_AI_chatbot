@@ -165,25 +165,45 @@ async def get_latest_active_subsidy_session(
     db: Session = Depends(get_db)
 ):
     """
-    Get the latest active subsidy consultation session for the current user
+    Get the latest subsidy consultation session for the current user
 
     This endpoint helps avoid creating duplicate sessions on page refresh.
-    It returns the most recent active session if one exists.
+    It returns the most recent session (ACTIVE or COMPLETED) to preserve
+    conversation history and allow users to view completed consultations.
+
+    Priority:
+    1. Return ACTIVE session if exists (conversation in progress)
+    2. Otherwise return most recent COMPLETED session (show results)
+    3. Return null if no sessions exist (first-time user)
 
     Requires: Authentication
-    Returns: Latest active session or null if none exists
+    Returns: Latest session or null if none exists
     """
-    # Find the most recent active session
-    latest_session = db.query(ChatSession).filter(
+    # First, try to find an active session
+    active_session = db.query(ChatSession).filter(
         ChatSession.user_id == current_user.id,
         ChatSession.status == ChatSessionStatus.ACTIVE
+    ).order_by(ChatSession.created_at.desc()).first()
+
+    if active_session:
+        return {
+            "session_id": active_session.id,
+            "status": active_session.status.value,
+            "created_at": active_session.created_at.isoformat() if active_session.created_at else None,
+            "completed_at": active_session.completed_at.isoformat() if active_session.completed_at else None
+        }
+
+    # If no active session, return the most recent completed session
+    latest_session = db.query(ChatSession).filter(
+        ChatSession.user_id == current_user.id
     ).order_by(ChatSession.created_at.desc()).first()
 
     if latest_session:
         return {
             "session_id": latest_session.id,
             "status": latest_session.status.value,
-            "created_at": latest_session.created_at.isoformat() if latest_session.created_at else None
+            "created_at": latest_session.created_at.isoformat() if latest_session.created_at else None,
+            "completed_at": latest_session.completed_at.isoformat() if latest_session.completed_at else None
         }
 
     return {"session_id": None}
