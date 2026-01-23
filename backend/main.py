@@ -102,7 +102,7 @@ async def send_subsidy_chatbot_message(
             session = handler.create_session()
 
             welcome_message = (
-                "您好！我是台灣政府補助診斷助理 🤖\n\n"
+                "您好！我是新手戰略指引的 AI 助理\n\n"
                 "我將協助您評估適合的政府補助方案，包括：\n"
                 "• 研發類：地方SBIR、CITD、中央SBIR\n"
                 "• 行銷類：開拓海外市場計畫、內銷推廣計畫\n\n"
@@ -191,6 +191,7 @@ async def get_latest_active_subsidy_session(
 
 @app.post("/api/subsidy/sessions/new")
 async def create_new_subsidy_session(
+    previous_session_id: Optional[int] = None,
     current_user: User = Depends(get_current_active_user),
     db: Session = Depends(get_db)
 ):
@@ -198,6 +199,9 @@ async def create_new_subsidy_session(
     Create a new subsidy consultation session
 
     This endpoint is called when user explicitly clicks "New Session".
+    Can optionally copy data from a previous session to preserve memory.
+
+    - **previous_session_id**: Optional ID of previous session to copy data from
 
     Requires: Authentication
     Returns: New session ID with welcome message
@@ -207,8 +211,39 @@ async def create_new_subsidy_session(
     # Create new session
     new_session = handler.create_session()
 
+    # If previous_session_id provided, copy consultation data to preserve memory
+    if previous_session_id:
+        try:
+            # Get previous consultation data
+            previous_consultation = db.query(SubsidyConsultation).filter(
+                SubsidyConsultation.chat_session_id == previous_session_id
+            ).first()
+
+            if previous_consultation:
+                # Copy data to new consultation
+                new_consultation = handler.consultation_data
+                new_consultation.project_type = previous_consultation.project_type
+                new_consultation.budget = previous_consultation.budget
+                new_consultation.people = previous_consultation.people
+                new_consultation.capital = previous_consultation.capital
+                new_consultation.revenue = previous_consultation.revenue
+                new_consultation.has_certification = previous_consultation.has_certification
+                new_consultation.has_gov_award = previous_consultation.has_gov_award
+                new_consultation.is_mit = previous_consultation.is_mit
+                new_consultation.has_industry_academia = previous_consultation.has_industry_academia
+                new_consultation.has_factory_registration = previous_consultation.has_factory_registration
+                new_consultation.bonus_count = previous_consultation.bonus_count
+                new_consultation.bonus_details = previous_consultation.bonus_details
+                new_consultation.marketing_type = previous_consultation.marketing_type
+                new_consultation.growth_revenue = previous_consultation.growth_revenue
+                db.commit()
+                print(f"✓ Copied consultation data from session {previous_session_id} to new session {new_session.id}")
+        except Exception as e:
+            print(f"⚠️ Warning: Could not copy previous session data: {e}")
+            # Continue anyway, don't fail the session creation
+
     welcome_message = (
-        "您好！我是台灣政府補助診斷助理 🤖\n\n"
+        "您好！我是新手戰略指引的 AI 助理\n\n"
         "我將協助您評估適合的政府補助方案，包括：\n"
         "• 研發類：地方SBIR、CITD、中央SBIR\n"
         "• 行銷類：開拓海外市場計畫、內銷推廣計畫\n\n"
