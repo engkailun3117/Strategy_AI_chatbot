@@ -100,7 +100,7 @@ class SubsidyChatbotHandler:
 - 當使用者回答任何問題時，立即調用 update_subsidy_data 函數保存
 - 不要只用文字確認，必須調用函數才能真正保存到數據庫
 - 即使只有一個欄位也要調用函數
-- **調用 update_subsidy_data 或 calculate_subsidy 函數時，不需要回傳文字回應**
+- **調用 update_subsidy_data 函數時，不需要回傳文字回應**
 - 系統會自動產生確認訊息並詢問下一個問題
 
 **工作流程**：
@@ -140,16 +140,26 @@ class SubsidyChatbotHandler:
 - **如果使用者主動提供多個資訊**，全部提取並記錄到 update_subsidy_data
 - 記住：調用函數時不要生成文字回應，讓系統自動處理對話流程
 
-✅ **資料確認流程（重要！）**：
-- **當收集完所有必要資料後，系統會自動顯示資料摘要並要求使用者確認**
-- 使用者會看到完整的資料清單
-- 如果使用者回覆「確認」、「正確」、「沒問題」、「可以」、「OK」等確認詞：
-  → 調用 confirm_data(confirmed=True) 函數
+✅ **資料確認流程（非常重要！）**：
+🔴 **絕對禁止在未顯示完整摘要前調用 confirm_data 或 calculate_subsidy**
+
+**正確流程：**
+1. 收集完所有必要資料後，**系統會自動顯示完整的資料摘要**
+2. 使用者必須先看到這個摘要，才能進行確認
+3. **只有在使用者看到摘要後，明確回覆「確認」、「正確」、「沒問題」、「可以」、「OK」等確認詞時**，才能調用 confirm_data(confirmed=True)
+4. confirm_data 被調用後，系統會自動計算補助
+
+**嚴格禁止：**
+- ❌ 不要在收集完資料後立即調用 confirm_data
+- ❌ 不要在使用者尚未看到資料摘要時調用 confirm_data
+- ❌ 不要在使用者只是更新某個欄位時就調用 confirm_data
+- ❌ 不要直接調用 calculate_subsidy（只有 confirm_data 後系統會自動調用）
+
+**資料修改：**
 - 如果使用者要求修改某項資料：
   → 調用 update_subsidy_data 更新該欄位
+  → **不要**調用 confirm_data
   → 系統會重新顯示摘要要求確認
-- **只有在使用者確認資料後，系統才會自動調用 calculate_subsidy 計算補助**
-- 絕對不要在使用者未確認資料時就計算補助
 
 🔄 **處理資料修改與更正**：
 - **如果使用者想要修改之前填寫的資料**，立即調用 update_subsidy_data 更新該欄位
@@ -171,26 +181,57 @@ class SubsidyChatbotHandler:
             return "尚未收集任何資料"
 
         data = []
-        if self.consultation_data.project_type:
-            data.append(f"計畫類型: {self.consultation_data.project_type}")
-        if self.consultation_data.budget is not None:
-            data.append(f"預計所需經費: {self.consultation_data.budget:,} 元 ({self.consultation_data.budget // 10000} 萬)")
-        if self.consultation_data.people is not None:
-            data.append(f"公司投保人數: {self.consultation_data.people} 人")
-        if self.consultation_data.capital is not None:
-            data.append(f"公司實收資本額: {self.consultation_data.capital:,} 元 ({self.consultation_data.capital // 10000} 萬)")
-        if self.consultation_data.revenue is not None:
-            data.append(f"公司年度營業額: {self.consultation_data.revenue:,} 元 ({self.consultation_data.revenue // 10000} 萬)")
-        if self.consultation_data.bonus_count is not None and self.consultation_data.bonus_count > 0:
-            data.append(f"加分項目數量: {self.consultation_data.bonus_count} 項")
-        if self.consultation_data.bonus_details:
-            data.append(f"加分項目: {self.consultation_data.bonus_details}")
-        if self.consultation_data.marketing_type:
-            data.append(f"行銷方向: {self.consultation_data.marketing_type}")
-        if self.consultation_data.growth_revenue is not None:
-            data.append(f"預計營業額成長: {self.consultation_data.growth_revenue:,} 元 ({self.consultation_data.growth_revenue // 10000} 萬)")
 
-        return "\n".join(data) if data else "尚未收集任何資料"
+        # Basic information
+        data.append("━━━━━━━━━━━━━━━━━━━━━━")
+        data.append("📋 基本資料")
+        data.append("━━━━━━━━━━━━━━━━━━━━━━")
+
+        if self.consultation_data.project_type:
+            data.append(f"• 計畫類型: {self.consultation_data.project_type}")
+        if self.consultation_data.budget is not None:
+            data.append(f"• 預計所需經費: {self.consultation_data.budget:,} 元 ({self.consultation_data.budget // 10000} 萬)")
+        if self.consultation_data.people is not None:
+            data.append(f"• 公司投保人數: {self.consultation_data.people} 人")
+        if self.consultation_data.capital is not None:
+            data.append(f"• 公司實收資本額: {self.consultation_data.capital:,} 元 ({self.consultation_data.capital // 10000} 萬)")
+        if self.consultation_data.revenue is not None:
+            data.append(f"• 公司年度營業額: {self.consultation_data.revenue:,} 元 ({self.consultation_data.revenue // 10000} 萬)")
+
+        # Bonus items (show all 5 items)
+        data.append("")
+        data.append("━━━━━━━━━━━━━━━━━━━━━━")
+        data.append("⭐ 加分項目")
+        data.append("━━━━━━━━━━━━━━━━━━━━━━")
+
+        if self.consultation_data.has_certification is not None:
+            status = "✅ 是" if self.consultation_data.has_certification else "❌ 否"
+            data.append(f"• 產品／服務取得第三方認證: {status}")
+        if self.consultation_data.has_gov_award is not None:
+            status = "✅ 是" if self.consultation_data.has_gov_award else "❌ 否"
+            data.append(f"• 取得政府相關獎項: {status}")
+        if self.consultation_data.is_mit is not None:
+            status = "✅ 是" if self.consultation_data.is_mit else "❌ 否"
+            data.append(f"• 產品為 MIT 生產: {status}")
+        if self.consultation_data.has_industry_academia is not None:
+            status = "✅ 是" if self.consultation_data.has_industry_academia else "❌ 否"
+            data.append(f"• 有做產學合作: {status}")
+        if self.consultation_data.has_factory_registration is not None:
+            status = "✅ 是" if self.consultation_data.has_factory_registration else "❌ 否"
+            data.append(f"• 有工廠登記證: {status}")
+
+        # Marketing-specific fields
+        if self.consultation_data.project_type == "行銷":
+            data.append("")
+            data.append("━━━━━━━━━━━━━━━━━━━━━━")
+            data.append("📈 行銷資訊")
+            data.append("━━━━━━━━━━━━━━━━━━━━━━")
+            if self.consultation_data.marketing_type:
+                data.append(f"• 行銷方向: {self.consultation_data.marketing_type}")
+            if self.consultation_data.growth_revenue is not None:
+                data.append(f"• 預計營業額成長: {self.consultation_data.growth_revenue:,} 元 ({self.consultation_data.growth_revenue // 10000} 萬)")
+
+        return "\n".join(data) if len(data) > 2 else "尚未收集任何資料"
 
     def extract_data_with_ai(self, user_message: str, conversation_history: List[Dict]) -> Dict[str, Any]:
         """Use Gemini AI to extract structured data from conversation"""
@@ -635,6 +676,13 @@ class SubsidyChatbotHandler:
             # Auto-calculate bonus_count and bonus_details from individual boolean fields
             if updated:
                 self._update_bonus_count_and_details()
+
+                # If data was updated and it was previously confirmed, reset confirmation
+                # This forces the system to show the summary again after any data modification
+                if self.consultation_data.data_confirmed:
+                    print(f"⚠️ Data was modified after confirmation. Resetting data_confirmed flag.")
+                    self.consultation_data.data_confirmed = False
+
                 self.db.commit()
 
             return updated
@@ -643,6 +691,41 @@ class SubsidyChatbotHandler:
             print(f"Error updating consultation data: {e}")
             self.db.rollback()
             return False
+
+    def are_all_required_fields_collected(self) -> bool:
+        """Check if all required fields have been collected"""
+        # Basic required fields
+        if not self.consultation_data.project_type:
+            return False
+        if self.consultation_data.budget is None:
+            return False
+        if self.consultation_data.people is None:
+            return False
+        if self.consultation_data.capital is None:
+            return False
+        if self.consultation_data.revenue is None:
+            return False
+
+        # All bonus items must be answered
+        if self.consultation_data.has_certification is None:
+            return False
+        if self.consultation_data.has_gov_award is None:
+            return False
+        if self.consultation_data.is_mit is None:
+            return False
+        if self.consultation_data.has_industry_academia is None:
+            return False
+        if self.consultation_data.has_factory_registration is None:
+            return False
+
+        # For marketing projects, additional fields required
+        if self.consultation_data.project_type == "行銷":
+            if not self.consultation_data.marketing_type:
+                return False
+            if self.consultation_data.growth_revenue is None:
+                return False
+
+        return True
 
     def calculate_and_save_subsidy(self) -> Tuple[bool, Optional[Dict]]:
         """Calculate subsidy amount and save results"""
@@ -743,8 +826,16 @@ class SubsidyChatbotHandler:
 
 {summary}
 
-如果以上資料都正確，請回覆「確認」或「正確」，我將為您計算補助方案。
-如果需要修改任何資料，請直接告訴我要修改的項目。"""
+━━━━━━━━━━━━━━━━━━━━━━
+
+✅ 如果以上資料都正確，請回覆「確認」、「正確」或「OK」，我將為您計算補助方案。
+
+✏️ 如果需要修改任何資料，請直接告訴我要修改的項目，例如：
+   • "預算改成 800 萬"
+   • "人數應該是 50 人"
+   • "有工廠登記證"
+
+我會立即更新資料並重新顯示摘要讓您確認。"""
 
         # Data confirmed, ready to calculate
         return "資料收集完成！讓我為您計算適合的補助方案..."
@@ -781,6 +872,12 @@ class SubsidyChatbotHandler:
                 elif call["name"] == "confirm_data":
                     # User confirmed the data is correct
                     if call["arguments"].get("confirmed", False):
+                        # Safety check: Only allow confirmation if all required fields are collected
+                        if not self.are_all_required_fields_collected():
+                            print("⚠️ Warning: confirm_data called but not all required fields are collected. Ignoring confirmation.")
+                            # Don't confirm, let the system continue asking for missing fields
+                            continue
+
                         self.consultation_data.data_confirmed = True
                         self.db.commit()
                         # Automatically trigger calculation after confirmation
