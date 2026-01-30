@@ -94,7 +94,13 @@ class SubsidyChatbotHandler:
 
     def get_system_prompt(self) -> str:
         """Get the system prompt for the AI"""
-        return """你是一個專業的台灣政府補助診斷助理。
+        return """你是一個專業、友善且熱心的台灣政府補助診斷助理。
+
+💬 **對話風格**：
+- 保持友善、專業且充滿熱忱
+- 使用鼓勵性的語言讓使用者保持專注
+- 對使用者的回答給予正面的回饋
+- 讓對話感覺自然流暢，不要過於制式化
 
 🚨 **最重要的規則：你必須使用函數來保存資料**
 - 當使用者回答任何問題時，立即調用 update_subsidy_data 函數保存
@@ -459,6 +465,25 @@ class SubsidyChatbotHandler:
         self.consultation_data.bonus_count = len(bonus_items)
         self.consultation_data.bonus_details = ", ".join(bonus_items) if bonus_items else None
 
+    def _get_progress_indicator(self) -> str:
+        """Generate a progress indicator showing questions answered"""
+        progress = self.get_progress()
+        completed = progress['fields_completed']
+        total = progress['total_fields']
+        percentage = int((completed / total) * 100) if total > 0 else 0
+
+        # Progress bar visualization
+        bar_length = 10
+        filled = int((completed / total) * bar_length) if total > 0 else 0
+        bar = "█" * filled + "░" * (bar_length - filled)
+
+        remaining = total - completed
+
+        if remaining == 0:
+            return f"\n\n✅ 進度：{bar} {percentage}% 完成 ({completed}/{total})"
+        else:
+            return f"\n\n📊 進度：{bar} {percentage}% ({completed}/{total} 題已完成，還剩 {remaining} 題)"
+
     def _get_natural_confirmation(self) -> str:
         """
         Generate a natural, context-aware confirmation message based on recently updated field.
@@ -470,30 +495,33 @@ class SubsidyChatbotHandler:
         # Refresh data to get latest values
         self.db.refresh(self.consultation_data)
 
+        # Get progress indicator
+        progress_indicator = self._get_progress_indicator()
+
         # If this was a correction, generate update-specific confirmation
         if hasattr(self, '_corrected_fields') and self._corrected_fields:
             field = self._corrected_fields[0]  # Get the first corrected field
 
             if field == "project_type":
-                return f"好的，已更新為「{self.consultation_data.project_type}」計畫類型。"
+                return f"好的，已更新為「{self.consultation_data.project_type}」計畫類型。{progress_indicator}"
             elif field == "budget":
                 budget_wan = self.consultation_data.budget // 10000
-                return f"了解，已將經費更新為 {budget_wan} 萬元。"
+                return f"了解，已將經費更新為 {budget_wan} 萬元。{progress_indicator}"
             elif field == "people":
-                return f"好的，已將投保人數更新為 {self.consultation_data.people} 人。"
+                return f"好的，已將投保人數更新為 {self.consultation_data.people} 人。{progress_indicator}"
             elif field == "capital":
                 capital_wan = self.consultation_data.capital // 10000
-                return f"收到，已將資本額更新為 {capital_wan} 萬元。"
+                return f"收到，已將資本額更新為 {capital_wan} 萬元。{progress_indicator}"
             elif field == "revenue":
                 revenue_wan = self.consultation_data.revenue // 10000
-                return f"明白，已將營業額更新為 {revenue_wan} 萬元。"
+                return f"明白，已將營業額更新為 {revenue_wan} 萬元。{progress_indicator}"
             elif field in ["has_certification", "has_gov_award", "is_mit", "has_industry_academia", "has_factory_registration"]:
-                return "好的，已更新您的回答。"
+                return f"好的，已更新您的回答。{progress_indicator}"
             elif field == "marketing_type":
-                return f"了解，已將行銷方向更新為「{self.consultation_data.marketing_type}」。"
+                return f"了解，已將行銷方向更新為「{self.consultation_data.marketing_type}」。{progress_indicator}"
             elif field == "growth_revenue":
                 growth_wan = self.consultation_data.growth_revenue // 10000
-                return f"收到，已將預計營業額成長更新為 {growth_wan} 萬元。"
+                return f"收到，已將預計營業額成長更新為 {growth_wan} 萬元。{progress_indicator}"
 
         # Check what was just updated and create context-aware confirmations
         if self.consultation_data.project_type and self.consultation_data.budget is None:
@@ -502,7 +530,7 @@ class SubsidyChatbotHandler:
                 f"了解，{self.consultation_data.project_type}計畫。",
                 f"好的，我們來協助您評估{self.consultation_data.project_type}補助方案。"
             ]
-            return random.choice(confirmations)
+            return random.choice(confirmations) + progress_indicator
 
         elif self.consultation_data.budget is not None and self.consultation_data.people is None:
             budget_wan = self.consultation_data.budget // 10000
@@ -511,7 +539,7 @@ class SubsidyChatbotHandler:
                 f"收到！經費規模為 {budget_wan} 萬元。",
                 f"了解，您的預算是 {budget_wan} 萬元。"
             ]
-            return random.choice(confirmations)
+            return random.choice(confirmations) + progress_indicator
 
         elif self.consultation_data.people is not None and self.consultation_data.capital is None:
             confirmations = [
@@ -519,7 +547,7 @@ class SubsidyChatbotHandler:
                 f"收到！{self.consultation_data.people} 位員工的規模。",
                 f"了解，投保人數為 {self.consultation_data.people} 人。"
             ]
-            return random.choice(confirmations)
+            return random.choice(confirmations) + progress_indicator
 
         elif self.consultation_data.capital is not None and self.consultation_data.revenue is None:
             capital_wan = self.consultation_data.capital // 10000
@@ -528,7 +556,7 @@ class SubsidyChatbotHandler:
                 f"收到！資本額 {capital_wan} 萬元。",
                 f"好的，已記錄資本額資訊。"
             ]
-            return random.choice(confirmations)
+            return random.choice(confirmations) + progress_indicator
 
         elif self.consultation_data.revenue is not None and self.consultation_data.has_certification is None:
             revenue_wan = self.consultation_data.revenue // 10000
@@ -537,7 +565,7 @@ class SubsidyChatbotHandler:
                 f"收到！營業額規模為 {revenue_wan} 萬元。",
                 f"好的，已記錄營收資料。"
             ]
-            return random.choice(confirmations)
+            return random.choice(confirmations) + progress_indicator
 
         # For bonus items
         elif self.consultation_data.has_certification is not None and self.consultation_data.has_gov_award is None:
@@ -545,28 +573,28 @@ class SubsidyChatbotHandler:
                 confirmations = ["太好了！有第三方認證會增加申請優勢。", "很好！認證是重要的加分項目。", "收到！認證資格已記錄。"]
             else:
                 confirmations = ["了解，沒有第三方認證。", "明白了。", "收到！"]
-            return random.choice(confirmations)
+            return random.choice(confirmations) + progress_indicator
 
         elif self.consultation_data.has_gov_award is not None and self.consultation_data.is_mit is None:
             if self.consultation_data.has_gov_award:
                 confirmations = ["很好！政府獎項是很大的加分。", "太棒了！有政府獎項認可。", "收到！獎項資格已記錄。"]
             else:
                 confirmations = ["了解。", "明白了。", "收到！"]
-            return random.choice(confirmations)
+            return random.choice(confirmations) + progress_indicator
 
         elif self.consultation_data.is_mit is not None and self.consultation_data.has_industry_academia is None:
             if self.consultation_data.is_mit:
                 confirmations = ["很好！MIT 產品有額外優勢。", "收到！MIT 生產已記錄。", "了解，在台灣生產。"]
             else:
                 confirmations = ["了解。", "明白了。", "收到！"]
-            return random.choice(confirmations)
+            return random.choice(confirmations) + progress_indicator
 
         elif self.consultation_data.has_industry_academia is not None and self.consultation_data.has_factory_registration is None:
             if self.consultation_data.has_industry_academia:
                 confirmations = ["太好了！產學合作是重要加分項。", "很好！有產學合作經驗。", "收到！產學合作已記錄。"]
             else:
                 confirmations = ["了解。", "明白了。", "收到！"]
-            return random.choice(confirmations)
+            return random.choice(confirmations) + progress_indicator
 
         elif self.consultation_data.has_factory_registration is not None:
             if self.consultation_data.has_factory_registration:
@@ -576,7 +604,7 @@ class SubsidyChatbotHandler:
                     confirmations = ["太好了！工廠登記證也會加分。", "很好！有完整的登記證明。", "收到！已記錄完所有加分項目。"]
             else:
                 confirmations = ["了解。", "明白了。", "收到！"]
-            return random.choice(confirmations)
+            return random.choice(confirmations) + progress_indicator
 
         # For marketing type
         elif self.consultation_data.marketing_type and self.consultation_data.growth_revenue is None:
@@ -585,10 +613,10 @@ class SubsidyChatbotHandler:
                 f"了解，{self.consultation_data.marketing_type}導向的行銷計畫。",
                 f"明白了，以{self.consultation_data.marketing_type}為主。"
             ]
-            return random.choice(confirmations)
+            return random.choice(confirmations) + progress_indicator
 
         # Default fallback
-        return random.choice(["好的！已記錄。", "收到！", "了解。", "明白了。"])
+        return random.choice(["好的！已記錄。", "收到！", "了解。", "明白了。"]) + progress_indicator
 
     def update_consultation_data(self, data: Dict[str, Any]) -> bool:
         """
