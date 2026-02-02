@@ -102,10 +102,19 @@ async def send_subsidy_chatbot_message(
             session = handler.create_session()
 
             welcome_message = (
-                "您好！我是新手戰略指引的 AI 助理\n\n"
+                "您好！我是新手戰略指引的 AI 助理 👋\n\n"
                 "我將協助您評估適合的政府補助方案，包括：\n"
                 "• 研發類：地方SBIR、CITD、中央SBIR\n"
                 "• 行銷類：開拓海外市場計畫、內銷推廣計畫\n\n"
+                "━━━━━━━━━━━━━━━━━━━━━━\n"
+                "📌 **為什麼需要填寫公司資料？**\n\n"
+                "填寫公司資料有利於系統了解公司屬性與優勢，平台未來能：\n"
+                "✨ 推薦合適的政府補助方案\n"
+                "✨ 推薦適合您公司的產品與服務\n"
+                "✨ 偵察潛在合作夥伴\n"
+                "✨ 協助企業申請政府補助案\n\n"
+                "━━━━━━━━━━━━━━━━━━━━━━\n\n"
+                "📝 接下來我會問您幾個問題（大約需要2-3分鐘）\n\n"
                 "讓我們開始吧！請問您的計畫類型是「研發」還是「行銷」？"
             )
 
@@ -165,25 +174,45 @@ async def get_latest_active_subsidy_session(
     db: Session = Depends(get_db)
 ):
     """
-    Get the latest active subsidy consultation session for the current user
+    Get the latest subsidy consultation session for the current user
 
     This endpoint helps avoid creating duplicate sessions on page refresh.
-    It returns the most recent active session if one exists.
+    It returns the most recent session (ACTIVE or COMPLETED) to preserve
+    conversation history and allow users to view completed consultations.
+
+    Priority:
+    1. Return ACTIVE session if exists (conversation in progress)
+    2. Otherwise return most recent COMPLETED session (show results)
+    3. Return null if no sessions exist (first-time user)
 
     Requires: Authentication
-    Returns: Latest active session or null if none exists
+    Returns: Latest session or null if none exists
     """
-    # Find the most recent active session
-    latest_session = db.query(ChatSession).filter(
+    # First, try to find an active session
+    active_session = db.query(ChatSession).filter(
         ChatSession.user_id == current_user.id,
         ChatSession.status == ChatSessionStatus.ACTIVE
+    ).order_by(ChatSession.created_at.desc()).first()
+
+    if active_session:
+        return {
+            "session_id": active_session.id,
+            "status": active_session.status.value,
+            "created_at": active_session.created_at.isoformat() if active_session.created_at else None,
+            "completed_at": active_session.completed_at.isoformat() if active_session.completed_at else None
+        }
+
+    # If no active session, return the most recent completed session
+    latest_session = db.query(ChatSession).filter(
+        ChatSession.user_id == current_user.id
     ).order_by(ChatSession.created_at.desc()).first()
 
     if latest_session:
         return {
             "session_id": latest_session.id,
             "status": latest_session.status.value,
-            "created_at": latest_session.created_at.isoformat() if latest_session.created_at else None
+            "created_at": latest_session.created_at.isoformat() if latest_session.created_at else None,
+            "completed_at": latest_session.completed_at.isoformat() if latest_session.completed_at else None
         }
 
     return {"session_id": None}
@@ -243,10 +272,19 @@ async def create_new_subsidy_session(
             # Continue anyway, don't fail the session creation
 
     welcome_message = (
-        "您好！我是新手戰略指引的 AI 助理\n\n"
+        "您好！我是新手戰略指引的 AI 助理 👋\n\n"
         "我將協助您評估適合的政府補助方案，包括：\n"
         "• 研發類：地方SBIR、CITD、中央SBIR\n"
         "• 行銷類：開拓海外市場計畫、內銷推廣計畫\n\n"
+        "━━━━━━━━━━━━━━━━━━━━━━\n"
+        "📌 **為什麼需要填寫公司資料？**\n\n"
+        "填寫公司資料有利於系統了解公司屬性與優勢，平台未來能：\n"
+        "✨ 推薦合適的政府補助方案\n"
+        "✨ 推薦適合您公司的產品與服務\n"
+        "✨ 偵察潛在合作夥伴\n"
+        "✨ 協助企業申請政府補助案\n\n"
+        "━━━━━━━━━━━━━━━━━━━━━━\n\n"
+        "📝 接下來我會問您幾個問題（大約需要2-3分鐘）\n\n"
         "讓我們開始吧！請問您的計畫類型是「研發」還是「行銷」？"
     )
 
